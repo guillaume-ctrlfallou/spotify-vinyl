@@ -137,9 +137,20 @@ class MediaListener : NotificationListenerService() {
         uriLoading = uri
         Thread {
             val bmp = runCatching {
+                // Only an encrypted download or another app's shared image; never plain http or local files.
                 val u = android.net.Uri.parse(uri)
-                val input = if (u.scheme == "http" || u.scheme == "https") java.net.URL(uri).openStream() else contentResolver.openInputStream(u)
-                input?.use { android.graphics.BitmapFactory.decodeStream(it) }
+                val input = when (u.scheme) {
+                    "https" -> java.net.URL(uri).openConnection().apply { connectTimeout = 8000; readTimeout = 8000 }.getInputStream()
+                    "content" -> contentResolver.openInputStream(u)
+                    else -> null
+                }
+                // cap at 4 MB so a bad link can't fill memory
+                val bytes = input?.use { it.readNBytes(4 shl 20) } ?: return@runCatching null
+                val o = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, o)
+                o.inJustDecodeBounds = false
+                while (o.outWidth / (o.inSampleSize.coerceAtLeast(1) * 2) >= 640) o.inSampleSize = o.inSampleSize.coerceAtLeast(1) * 2
+                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, o)
             }.getOrNull()
             handler.post {
                 if (uriLoading == uri) uriLoading = null
