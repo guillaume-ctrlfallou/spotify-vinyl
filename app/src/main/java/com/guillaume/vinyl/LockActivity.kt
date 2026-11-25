@@ -87,6 +87,7 @@ class LockActivity : ComponentActivity() {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
         registerReceiver(unlocked, IntentFilter(Intent.ACTION_USER_PRESENT))
+        Player.log("lecteur affiché")
         setContent { LockScreen(onUnlock = ::unlock) }
     }
 
@@ -96,7 +97,10 @@ class LockActivity : ComponentActivity() {
         // Opened while the phone is already unlocked (or nothing to show): don't sit on top of anything.
         val unlockedNow = !getSystemService(KeyguardManager::class.java).isKeyguardLocked &&
             getSystemService(PowerManager::class.java).isInteractive
-        if (unlockedNow || !Player.state.value.hasSession) finish()
+        if (unlockedNow || !Player.state.value.hasSession) {
+            Player.log(if (unlockedNow) "lecteur fermé : téléphone pas verrouillé" else "lecteur fermé : pas de musique")
+            finish()
+        }
     }
 
     override fun onDestroy() {

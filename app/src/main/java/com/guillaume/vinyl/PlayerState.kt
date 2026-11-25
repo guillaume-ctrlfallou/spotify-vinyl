@@ -37,6 +37,13 @@ object Player {
         val c = controller ?: return
         if (state.value.isPlaying) c.transportControls.pause() else c.transportControls.play()
     }
+    /** Last events, shown on the setup screen to see where things stop. */
+    val events = MutableStateFlow(listOf<String>())
+    fun log(msg: String) {
+        val t = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+        events.value = (listOf("$t  $msg") + events.value).take(8)
+    }
+
     fun next() { controller?.transportControls?.skipToNext() }
     fun previous() { controller?.transportControls?.skipToPrevious() }
 }

@@ -1,10 +1,6 @@
 package com.guillaume.vinyl
 
 import android.app.KeyguardManager
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
@@ -19,8 +15,6 @@ import android.media.session.PlaybackState
 import android.service.notification.NotificationListenerService
 
 private const val SPOTIFY = "com.spotify.music"
-private const val CHANNEL = "lock"
-const val LOCK_NOTIF_ID = 1
 
 /**
  * Notification access is what lets us read Spotify's media session.
@@ -47,13 +41,15 @@ class MediaListener : NotificationListenerService() {
         sessions = msm
         msm.addOnActiveSessionsChangedListener(sessionsListener, me)
         pick(msm.getActiveSessions(me))
+        Player.log("service connecté")
         registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF))
     }
 
     // Screen turned off with Spotify around: put our player on the lock screen for when it wakes.
     private val screenOff = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
-            if (Player.state.value.hasSession) showLockPlayer()
+            if (Player.state.value.hasSession) launchLockPlayer(c, "écran éteint")
+            else Player.log("écran éteint, pas de session Spotify")
         }
     }
 
@@ -61,29 +57,6 @@ class MediaListener : NotificationListenerService() {
         getSystemService(KeyguardManager::class.java).isKeyguardLocked ||
             !getSystemService(PowerManager::class.java).isInteractive
 
-    /** A full-screen notification is the allowed way to open an activity on the lock screen. */
-    private fun showLockPlayer() {
-        val nm = getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(
-            NotificationChannel(CHANNEL, "Lecteur écran de verrouillage", NotificationManager.IMPORTANCE_HIGH).apply {
-                setSound(null, null)
-                enableVibration(false)
-                lockscreenVisibility = Notification.VISIBILITY_SECRET
-            }
-        )
-        val open = PendingIntent.getActivity(
-            this, 0, Intent(this, LockActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-        val n = Notification.Builder(this, CHANNEL)
-            .setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle("Vinyle")
-            .setCategory(Notification.CATEGORY_ALARM)
-            .setFullScreenIntent(open, true)
-            .setAutoCancel(true)
-            .build()
-        runCatching { nm.notify(LOCK_NOTIF_ID, n) }
-    }
 
     override fun onListenerDisconnected() {
         sessions?.removeOnActiveSessionsChangedListener(sessionsListener)
@@ -122,7 +95,7 @@ class MediaListener : NotificationListenerService() {
             // metadata hands out a new Bitmap each call, so compare the track instead
             colors = if (title == old.title && artist == old.artist && old.cover != null) old.colors else paletteColors(cover),
         )
-        if (playing && !old.isPlaying && isLocked()) showLockPlayer()
+        if (playing && !old.isPlaying && isLocked()) launchLockPlayer(this, "lecture sur téléphone verrouillé")
     }
 
     private fun MediaMetadata.cover(): Bitmap? =
