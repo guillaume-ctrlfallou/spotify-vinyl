@@ -41,7 +41,7 @@ object ShadePlayer {
             )
         }
         // Artwork is drawn once per track and reused for progress updates.
-        val key = s.title + "|" + s.artist + "|" + (s.cover != null)
+        val key = s.title + "|" + s.artist + "|" + System.identityHashCode(s.cover)
         if (key != artFor) {
             artFor = key
             disc = ShadeArt.vinyl(s.cover, 144)

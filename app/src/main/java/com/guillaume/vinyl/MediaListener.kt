@@ -93,8 +93,9 @@ class MediaListener : NotificationListenerService() {
         val playing = c.playbackState?.state == PlaybackState.STATE_PLAYING
         val title = m?.getString(MediaMetadata.METADATA_KEY_TITLE).orEmpty()
         val artist = m?.getString(MediaMetadata.METADATA_KEY_ARTIST).orEmpty()
-        val sameTrack = title == old.title && artist == old.artist && old.cover != null
-        val cover = if (sameTrack) old.cover else m?.cover()
+        // Spotify often changes the title before it sends the new art, so follow the bitmap itself, not the title.
+        val cover = m?.cover() ?: m?.coverFromUri()
+        val sameCover = cover != null && cover === old.cover
         Player.state.value = PlayerState(
             title = title,
             artist = artist,
@@ -102,7 +103,7 @@ class MediaListener : NotificationListenerService() {
             isPlaying = playing,
             hasSession = true,
             durationMs = m?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0,
-            colors = if (sameTrack) old.colors else paletteColors(cover),
+            colors = if (sameCover) old.colors else paletteColors(cover),
         )
         if (playing && !old.isPlaying && isLocked()) launchLockPlayer(this, "lecture sur téléphone verrouillé")
         ShadePlayer.update(this)
@@ -124,4 +125,27 @@ class MediaListener : NotificationListenerService() {
         getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
             ?: getBitmap(MediaMetadata.METADATA_KEY_ART)
             ?: getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
+
+    // Some tracks only carry a link to the art: fetch it off the main thread, then publish again.
+    private var uriArt: Pair<String, Bitmap>? = null
+    private var uriLoading: String? = null
+    private fun MediaMetadata.coverFromUri(): Bitmap? {
+        val uri = listOf(MediaMetadata.METADATA_KEY_ALBUM_ART_URI, MediaMetadata.METADATA_KEY_ART_URI, MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI)
+            .firstNotNullOfOrNull { getString(it)?.takeIf { u -> u.isNotBlank() } } ?: return null
+        uriArt?.let { if (it.first == uri) return it.second }
+        if (uriLoading == uri) return null
+        uriLoading = uri
+        Thread {
+            val bmp = runCatching {
+                val u = android.net.Uri.parse(uri)
+                val input = if (u.scheme == "http" || u.scheme == "https") java.net.URL(uri).openStream() else contentResolver.openInputStream(u)
+                input?.use { android.graphics.BitmapFactory.decodeStream(it) }
+            }.getOrNull()
+            handler.post {
+                if (uriLoading == uri) uriLoading = null
+                if (bmp != null) { uriArt = uri to bmp; publish() } else Player.log("pochette introuvable : $uri")
+            }
+        }.start()
+        return null
+    }
 }
