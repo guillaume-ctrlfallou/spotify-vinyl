@@ -64,6 +64,7 @@ class MediaListener : NotificationListenerService() {
         current?.unregisterCallback(callback)
         current = null
         Player.controller = null
+        handler.removeCallbacks(progressTick)
     }
 
     private fun pick(list: List<MediaController>) {
@@ -78,7 +79,7 @@ class MediaListener : NotificationListenerService() {
     }
 
     private fun publish() {
-        val c = current ?: run { Player.state.value = PlayerState(); return }
+        val c = current ?: run { Player.state.value = PlayerState(); ShadePlayer.update(this); return }
         val m = c.metadata
         val cover = m?.cover()
         val old = Player.state.value
@@ -96,6 +97,18 @@ class MediaListener : NotificationListenerService() {
             colors = if (title == old.title && artist == old.artist && old.cover != null) old.colors else paletteColors(cover),
         )
         if (playing && !old.isPlaying && isLocked()) launchLockPlayer(this, "lecture sur téléphone verrouillé")
+        ShadePlayer.update(this)
+        handler.removeCallbacks(progressTick)
+        if (playing) handler.postDelayed(progressTick, 2000)
+    }
+
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    // Keeps the shade progress bar moving while music plays.
+    private val progressTick = object : Runnable {
+        override fun run() {
+            ShadePlayer.update(this@MediaListener)
+            if (Player.state.value.isPlaying) handler.postDelayed(this, 2000)
+        }
     }
 
     private fun MediaMetadata.cover(): Bitmap? =
