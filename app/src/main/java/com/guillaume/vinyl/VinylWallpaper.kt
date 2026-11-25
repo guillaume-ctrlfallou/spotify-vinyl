@@ -13,9 +13,7 @@ import android.graphics.Path
 import android.graphics.RuntimeShader
 import android.graphics.SweepGradient
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.os.SystemClock
+import android.view.Choreographer
 import android.service.wallpaper.WallpaperService
 import android.view.SurfaceHolder
 import kotlin.math.PI
@@ -32,7 +30,6 @@ class VinylWallpaper : WallpaperService() {
     override fun onCreateEngine(): Engine = VinylEngine()
 
     inner class VinylEngine : Engine() {
-        private val handler = Handler(Looper.getMainLooper())
         private val scope = MainScope()
         private val shader = RuntimeShader(MILKDROP)
         private val bg = Paint().apply { shader = this@VinylEngine.shader }
@@ -48,19 +45,29 @@ class VinylWallpaper : WallpaperService() {
         private var h = 1f
         private var angle = 0f
         private var playAmount = 0f // 0 = paused look, 1 = playing look (smoothed)
-        private var last = SystemClock.uptimeMillis()
+        private fun nowMs() = System.nanoTime() / 1_000_000L // same clock as vsync frame times
+        private var last = nowMs()
         private val start = last
 
         // Cover + grooves baked once per track at disc size; each frame only rotates this bitmap.
         private var discFor: Bitmap? = null
         private var disc: Bitmap? = null
 
-        private val frame = object : Runnable {
-            override fun run() {
-                draw()
+        // Driven by the display's vsync so every frame lands evenly (no judder on 120 Hz screens).
+        // 60 fps on the lock screen, 30 fps behind the home screen icons.
+        private val choreographer = Choreographer.getInstance()
+        private var lastDrawNs = 0L
+        private var locked = true
+        private var lockedCheckedNs = 0L
+        private val frame = object : Choreographer.FrameCallback {
+            override fun doFrame(ns: Long) {
+                if (!visible) { looping = false; return }
+                if (ns - lockedCheckedNs > 1_000_000_000L) { lockedCheckedNs = ns; locked = isLocked() }
+                val gap = if (locked) 15_000_000L else 31_000_000L
+                if (lastDrawNs == 0L || ns - lastDrawNs >= gap) { lastDrawNs = ns; draw(ns / 1_000_000L) }
                 // Paused and settled: stop drawing entirely until the player state changes.
-                looping = visible && (Player.state.value.isPlaying || playAmount > 0.01f)
-                if (looping) handler.postDelayed(this, if (isLocked()) 33 else 50)
+                looping = Player.state.value.isPlaying || playAmount > 0.01f
+                if (looping) choreographer.postFrameCallback(this)
             }
         }
 
@@ -82,20 +89,21 @@ class VinylWallpaper : WallpaperService() {
 
         override fun onDestroy() {
             scope.cancel()
-            handler.removeCallbacks(frame)
+            choreographer.removeFrameCallback(frame)
         }
 
         private fun kick() {
-            if (!looping) last = SystemClock.uptimeMillis() // no jump after a long pause
-            handler.removeCallbacks(frame)
-            handler.post(frame)
+            if (!looping) last = nowMs() // no jump after a long pause
+            choreographer.removeFrameCallback(frame)
+            lastDrawNs = 0L
+            choreographer.postFrameCallback(frame)
         }
 
         private fun isLocked() = getSystemService(KeyguardManager::class.java).isKeyguardLocked
 
         override fun onVisibilityChanged(v: Boolean) {
             visible = v
-            handler.removeCallbacks(frame)
+            choreographer.removeFrameCallback(frame)
             looping = false
             if (v) kick()
         }
@@ -110,7 +118,7 @@ class VinylWallpaper : WallpaperService() {
         override fun onSurfaceDestroyed(holder: SurfaceHolder) {
             visible = false
             looping = false
-            handler.removeCallbacks(frame)
+            choreographer.removeFrameCallback(frame)
         }
 
         // Home screen launchers send a tap command (screen pixels); the lock screen keeps touches for itself.
@@ -124,10 +132,9 @@ class VinylWallpaper : WallpaperService() {
         private fun cy() = h * DISC_Y
         private fun radius() = min(w, h) * DISC_R
 
-        private fun draw() {
+        private fun draw(now: Long) {
             val s = Player.state.value
             val colors = s.colors
-            val now = SystemClock.uptimeMillis()
             val dt = (now - last) / 1000f
             last = now
             playAmount += ((if (s.isPlaying) 1f else 0f) - playAmount) * min(1f, dt * 3f)

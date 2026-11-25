@@ -61,11 +61,11 @@ object ShadeArt {
                     w + 20f, h * rnd.nextFloat())
             }
             // wide soft glow, then a thin bright core
-            p.maskFilter = BlurMaskFilter(28f, BlurMaskFilter.Blur.NORMAL)
-            p.strokeWidth = 46f; p.color = (col and 0x00FFFFFF) or 0x55000000
+            p.maskFilter = BlurMaskFilter(28f * w / 480f, BlurMaskFilter.Blur.NORMAL)
+            p.strokeWidth = 46f * w / 480f; p.color = (col and 0x00FFFFFF) or 0x55000000
             c.drawPath(path, p)
-            p.maskFilter = BlurMaskFilter(3f, BlurMaskFilter.Blur.NORMAL)
-            p.strokeWidth = 2.5f; p.color = (col and 0x00FFFFFF) or 0xCC000000.toInt()
+            p.maskFilter = BlurMaskFilter(3f * w / 480f, BlurMaskFilter.Blur.NORMAL)
+            p.strokeWidth = 2.5f * w / 480f; p.color = (col and 0x00FFFFFF) or 0xCC000000.toInt()
             c.drawPath(path, p)
         }
         // darken the left/text side slightly for legibility

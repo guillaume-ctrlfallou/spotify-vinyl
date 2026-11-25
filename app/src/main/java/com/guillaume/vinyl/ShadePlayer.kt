@@ -44,8 +44,8 @@ object ShadePlayer {
         val key = s.title + "|" + s.artist + "|" + (s.cover != null)
         if (key != artFor) {
             artFor = key
-            disc = ShadeArt.vinyl(s.cover)
-            bgArt = ShadeArt.ribbons(s.colors, key.hashCode())
+            disc = ShadeArt.vinyl(s.cover, 144)
+            bgArt = ShadeArt.ribbons(s.colors, key.hashCode(), 320, 112) // kept small: re-sent every second
         }
         val pos = Player.controller?.playbackState?.let { ps ->
             ps.position + if (ps.state == PlaybackState.STATE_PLAYING)
