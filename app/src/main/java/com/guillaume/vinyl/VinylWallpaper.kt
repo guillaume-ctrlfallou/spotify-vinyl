@@ -83,7 +83,7 @@ class VinylWallpaper : WallpaperService() {
         }
 
         private fun cx() = w / 2
-        private fun cy() = h * 0.52f
+        private fun cy() = h * 0.46f
         private fun radius() = min(w, h) * 0.38f
 
         private fun draw() {
