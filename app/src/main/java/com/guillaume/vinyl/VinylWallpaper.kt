@@ -2,7 +2,6 @@ package com.guillaume.vinyl
 
 import android.app.KeyguardManager
 import android.app.WallpaperManager
-import android.view.WindowManager
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
@@ -43,6 +42,7 @@ class VinylWallpaper : WallpaperService() {
         private val clip = Path()
 
         private var visible = false
+        private var scaled = false // false = full resolution (fallback)
         private var looping = false
         private var w = 1f
         private var h = 1f
@@ -67,8 +67,16 @@ class VinylWallpaper : WallpaperService() {
         override fun onCreate(surfaceHolder: SurfaceHolder) {
             setTouchEventsEnabled(false)
             // Render below screen resolution, the compositor upscales: far fewer shader pixels.
-            val b = getSystemService(WindowManager::class.java).maximumWindowMetrics.bounds
-            surfaceHolder.setFixedSize((b.width() * SCALE).toInt(), (b.height() * SCALE).toInt())
+            // A wallpaper service has no display of its own (WindowManager metrics throw here),
+            // so read the default display; if anything fails, just render at full resolution.
+            runCatching {
+                val m = android.util.DisplayMetrics()
+                @Suppress("DEPRECATION")
+                getSystemService(android.hardware.display.DisplayManager::class.java)
+                    .getDisplay(android.view.Display.DEFAULT_DISPLAY).getRealMetrics(m)
+                surfaceHolder.setFixedSize((m.widthPixels * SCALE).toInt(), (m.heightPixels * SCALE).toInt())
+                scaled = true
+            }
             scope.launch { Player.state.collect { if (visible) kick() } }
         }
 
@@ -107,10 +115,11 @@ class VinylWallpaper : WallpaperService() {
 
         // Home screen launchers send a tap command (screen pixels); the lock screen keeps touches for itself.
         override fun onCommand(action: String?, x: Int, y: Int, z: Int, extras: Bundle?, resultRequested: Boolean): Bundle? {
-            if (action == WallpaperManager.COMMAND_TAP && hypot(x * SCALE - cx(), y * SCALE - cy()) < radius()) Player.togglePlayPause()
+            if (action == WallpaperManager.COMMAND_TAP && hypot(x * k() - cx(), y * k() - cy()) < radius()) Player.togglePlayPause()
             return null
         }
 
+        private fun k() = if (scaled) SCALE else 1f
         private fun cx() = w / 2
         private fun cy() = h * DISC_Y
         private fun radius() = min(w, h) * DISC_R
