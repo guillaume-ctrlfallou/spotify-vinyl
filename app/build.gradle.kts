@@ -10,7 +10,7 @@ android {
     defaultConfig {
         applicationId = "com.guillaume.vinyl"
         minSdk = 33
-        targetSdk = 35
+        targetSdk = 30 // below 31 keeps full-width custom notifications; Android 12+ forces the app icon otherwise
         versionCode = 1
         versionName = "1.0"
     }

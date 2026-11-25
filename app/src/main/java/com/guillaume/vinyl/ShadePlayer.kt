@@ -70,7 +70,6 @@ object ShadePlayer {
         }
         val n = Notification.Builder(ctx, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_media_play)
-            .setStyle(Notification.DecoratedCustomViewStyle())
             .setCustomContentView(views(R.layout.notif_small))
             .setCustomBigContentView(views(R.layout.notif_big))
             .setOngoing(s.isPlaying)
