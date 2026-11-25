@@ -13,7 +13,13 @@ import android.media.session.PlaybackState
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -168,11 +174,36 @@ private fun LockScreen(onUnlock: () -> Unit) {
             }
         }
 
+        // Our window hides Samsung's fingerprint icon. Put one where the sensor usually is:
+        // pressing it opens the system unlock at once, so a finger kept there gets read.
+        FingerprintButton(
+            Modifier.align(Alignment.BottomCenter).padding(bottom = maxHeight * 0.105f),
+            accent, onUnlock,
+        )
+
         Text(
-            "Glisse vers le haut pour déverrouiller",
+            "Empreinte ou glisse vers le haut",
             color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp,
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 36.dp),
         )
+    }
+}
+
+@Composable
+private fun FingerprintButton(modifier: Modifier, accent: Color, onUnlock: () -> Unit) {
+    Canvas(
+        modifier.size(64.dp).pointerInput(Unit) { detectTapGestures(onPress = { onUnlock() }) }
+    ) {
+        val c = Offset(size.width / 2, size.height / 2)
+        drawCircle(accent.copy(alpha = 0.18f))
+        // simple fingerprint: nested open arcs
+        for (i in 1..4) {
+            val r = size.minDimension * 0.09f * i
+            drawArc(
+                Color.White.copy(alpha = 0.85f), startAngle = 200f - i * 6, sweepAngle = 140f + i * 12, useCenter = false,
+                topLeft = Offset(c.x - r, c.y - r), size = Size(r * 2, r * 2), style = Stroke(2.dp.toPx(), cap = StrokeCap.Round),
+            )
+        }
     }
 }
 
