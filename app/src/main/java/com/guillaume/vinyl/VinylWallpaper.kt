@@ -1,12 +1,16 @@
 package com.guillaume.vinyl
 
+import android.app.KeyguardManager
 import android.app.WallpaperManager
+import android.view.WindowManager
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
-import android.graphics.RectF
 import android.graphics.RuntimeShader
 import android.graphics.SweepGradient
 import android.os.Bundle
@@ -30,14 +34,16 @@ class VinylWallpaper : WallpaperService() {
 
     inner class VinylEngine : Engine() {
         private val handler = Handler(Looper.getMainLooper())
+        private val scope = MainScope()
         private val shader = RuntimeShader(MILKDROP)
         private val bg = Paint().apply { shader = this@VinylEngine.shader }
         private val bmpPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-        private val groove = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 1.5f }
         private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
+        private val shine = Paint(Paint.ANTI_ALIAS_FLAG)
         private val clip = Path()
 
         private var visible = false
+        private var looping = false
         private var w = 1f
         private var h = 1f
         private var angle = 0f
@@ -45,38 +51,63 @@ class VinylWallpaper : WallpaperService() {
         private var last = SystemClock.uptimeMillis()
         private val start = last
 
+        // Cover + grooves baked once per track at disc size; each frame only rotates this bitmap.
+        private var discFor: Bitmap? = null
+        private var disc: Bitmap? = null
 
         private val frame = object : Runnable {
             override fun run() {
                 draw()
-                if (visible) handler.postDelayed(this, if (Player.state.value.isPlaying || playAmount > 0.01f) 33 else 100)
+                // Paused and settled: stop drawing entirely until the player state changes.
+                looping = visible && (Player.state.value.isPlaying || playAmount > 0.01f)
+                if (looping) handler.postDelayed(this, if (isLocked()) 33 else 50)
             }
         }
 
         override fun onCreate(surfaceHolder: SurfaceHolder) {
             setTouchEventsEnabled(false)
+            // Render below screen resolution, the compositor upscales: far fewer shader pixels.
+            val b = getSystemService(WindowManager::class.java).maximumWindowMetrics.bounds
+            surfaceHolder.setFixedSize((b.width() * SCALE).toInt(), (b.height() * SCALE).toInt())
+            scope.launch { Player.state.collect { if (visible) kick() } }
         }
 
-        override fun onVisibilityChanged(v: Boolean) {
-            visible = v
+        override fun onDestroy() {
+            scope.cancel()
             handler.removeCallbacks(frame)
-            if (v) { last = SystemClock.uptimeMillis(); handler.post(frame) }
         }
 
-        override fun onSurfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-            w = width.toFloat(); h = height.toFloat()
+        private fun kick() {
+            if (!looping) last = SystemClock.uptimeMillis() // no jump after a long pause
             handler.removeCallbacks(frame)
             handler.post(frame)
         }
 
+        private fun isLocked() = getSystemService(KeyguardManager::class.java).isKeyguardLocked
+
+        override fun onVisibilityChanged(v: Boolean) {
+            visible = v
+            handler.removeCallbacks(frame)
+            looping = false
+            if (v) kick()
+        }
+
+        override fun onSurfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+            w = width.toFloat(); h = height.toFloat()
+            discFor = null
+            shine.shader = SweepGradient(cx(), cy(), intArrayOf(0, 0x22FFFFFF, 0, 0, 0x22FFFFFF, 0), null)
+            kick()
+        }
+
         override fun onSurfaceDestroyed(holder: SurfaceHolder) {
             visible = false
+            looping = false
             handler.removeCallbacks(frame)
         }
 
-        // Home screen launchers send a tap command; the lock screen keeps touches for itself.
+        // Home screen launchers send a tap command (screen pixels); the lock screen keeps touches for itself.
         override fun onCommand(action: String?, x: Int, y: Int, z: Int, extras: Bundle?, resultRequested: Boolean): Bundle? {
-            if (action == WallpaperManager.COMMAND_TAP && hypot(x - cx(), y - cy()) < radius()) Player.togglePlayPause()
+            if (action == WallpaperManager.COMMAND_TAP && hypot(x * SCALE - cx(), y * SCALE - cy()) < radius()) Player.togglePlayPause()
             return null
         }
 
@@ -93,10 +124,15 @@ class VinylWallpaper : WallpaperService() {
             playAmount += ((if (s.isPlaying) 1f else 0f) - playAmount) * min(1f, dt * 3f)
             angle = (angle + dt * 100f * playAmount) % 360f // ~17 rpm, eases to a stop on pause
 
+            if (s.hasSession && (disc == null || discFor !== s.cover)) {
+                discFor = s.cover
+                disc = ShadeArt.vinyl(s.cover, (radius() * 2).toInt().coerceAtLeast(2), shine = false)
+            }
+
             val holder = surfaceHolder
             val c = runCatching { holder.lockHardwareCanvas() }.getOrNull() ?: return
             try {
-                val t = (now - start) / 1000f
+                val t = ((now - start) / 1000f) % 3600f // keep float precision over long sessions
                 val beat = 0.5f + 0.5f * sin(t * 2f * PI.toFloat() * 2f) // 120 bpm feel
                 shader.setFloatUniform("res", w, h)
                 shader.setFloatUniform("t", t * (0.35f + 0.65f * playAmount))
@@ -105,42 +141,23 @@ class VinylWallpaper : WallpaperService() {
                 shader.setColorUniform("c0", colors[0])
                 shader.setColorUniform("c1", colors[1])
                 shader.setColorUniform("c2", colors[2])
-                c.drawPaint(bg)
-                if (s.hasSession) drawRecord(c, s.cover)
+                if (s.hasSession) {
+                    // don't shade the pixels the record covers anyway
+                    c.save(); clip.rewind(); clip.addCircle(cx(), cy(), radius() * 0.99f, Path.Direction.CW)
+                    c.clipOutPath(clip); c.drawPaint(bg); c.restore()
+                    drawRecord(c)
+                } else c.drawPaint(bg)
             } finally {
                 holder.unlockCanvasAndPost(c)
             }
         }
 
-        private fun drawRecord(c: Canvas, cover: Bitmap?) {
+        private fun drawRecord(c: Canvas) {
             val x = cx(); val y = cy(); val r = radius()
             fill.color = Color.argb(140, 0, 0, 0)
             c.drawCircle(x, y, r * 1.03f, fill) // soft rim
-            c.save()
-            c.rotate(angle, x, y)
-            clip.rewind(); clip.addCircle(x, y, r, Path.Direction.CW)
-            c.clipPath(clip)
-            if (cover != null) {
-                // center-crop the cover to the disc
-                val side = min(cover.width, cover.height)
-                val src = android.graphics.Rect((cover.width - side) / 2, (cover.height - side) / 2,
-                    (cover.width + side) / 2, (cover.height + side) / 2)
-                c.drawBitmap(cover, src, RectF(x - r, y - r, x + r, y + r), bmpPaint)
-            } else {
-                fill.color = Color.rgb(17, 17, 17); c.drawCircle(x, y, r, fill)
-            }
-            // vinyl grooves over the artwork
-            groove.color = Color.argb(28, 0, 0, 0)
-            var g = r * 0.97f
-            while (g > r * 0.2f) { c.drawCircle(x, y, g, groove); g -= r * 0.025f }
-            c.restore()
-            // light reflection stays still while the record turns
-            fill.shader = SweepGradient(x, y, intArrayOf(0, 0x22FFFFFF, 0, 0, 0x22FFFFFF, 0), null)
-            c.drawCircle(x, y, r, fill)
-            fill.shader = null
-            // spindle hole
-            fill.color = Color.BLACK; c.drawCircle(x, y, r * 0.045f, fill)
-            groove.color = Color.argb(90, 255, 255, 255); c.drawCircle(x, y, r * 0.06f, groove)
+            disc?.let { c.save(); c.rotate(angle, x, y); c.drawBitmap(it, x - r, y - r, bmpPaint); c.restore() }
+            c.drawCircle(x, y, r, shine) // light reflection stays still while the record turns
         }
     }
 }
@@ -148,6 +165,9 @@ class VinylWallpaper : WallpaperService() {
 /** Disc position as fractions of the screen, shared with the lock screen controls. */
 const val DISC_Y = 0.46f
 const val DISC_R = 0.38f
+
+/** Wallpaper surface resolution vs screen; the ribbons are soft so the upscale is invisible. */
+private const val SCALE = 0.6f
 
 /** MilkDrop-like silky light ribbons (AGSL). Prototyped in WebGL first. */
 private const val MILKDROP = """

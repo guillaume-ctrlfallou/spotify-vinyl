@@ -22,6 +22,8 @@ private const val NOTIF_ID = 2
  */
 object ShadePlayer {
     private var artFor: String? = null
+    private var channelMade = false
+    private var open: PendingIntent? = null
     private var disc: Bitmap? = null
     private var bgArt: Bitmap? = null
 
@@ -29,12 +31,15 @@ object ShadePlayer {
         val nm = ctx.getSystemService(NotificationManager::class.java)
         val s = Player.state.value
         if (!s.hasSession) { nm.cancel(NOTIF_ID); return }
-        nm.createNotificationChannel(
-            NotificationChannel(CHANNEL, "Lecteur (volet)", NotificationManager.IMPORTANCE_LOW).apply {
-                setShowBadge(false)
-                lockscreenVisibility = Notification.VISIBILITY_SECRET
-            }
-        )
+        if (!channelMade) {
+            channelMade = true
+            nm.createNotificationChannel(
+                NotificationChannel(CHANNEL, "Lecteur (volet)", NotificationManager.IMPORTANCE_LOW).apply {
+                    setShowBadge(false)
+                    lockscreenVisibility = Notification.VISIBILITY_SECRET
+                }
+            )
+        }
         // Artwork is drawn once per track and reused for progress updates.
         val key = s.title + "|" + s.artist + "|" + (s.cover != null)
         if (key != artFor) {
@@ -65,7 +70,7 @@ object ShadePlayer {
             }
         }
 
-        val open = ctx.packageManager.getLaunchIntentForPackage("com.spotify.music")?.let {
+        if (open == null) open = ctx.packageManager.getLaunchIntentForPackage("com.spotify.music")?.let {
             PendingIntent.getActivity(ctx, 10, it, PendingIntent.FLAG_IMMUTABLE)
         }
         val n = Notification.Builder(ctx, CHANNEL)

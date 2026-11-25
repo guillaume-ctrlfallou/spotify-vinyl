@@ -24,6 +24,8 @@ class MediaListener : NotificationListenerService() {
 
     private var sessions: MediaSessionManager? = null
     private var current: MediaController? = null
+    // cached: reading controller.metadata unparcels the whole artwork each time
+    private var meta: MediaMetadata? = null
 
     private val sessionsListener = MediaSessionManager.OnActiveSessionsChangedListener { list ->
         pick(list.orEmpty())
@@ -31,7 +33,7 @@ class MediaListener : NotificationListenerService() {
 
     private val callback = object : MediaController.Callback() {
         override fun onPlaybackStateChanged(state: PlaybackState?) = publish()
-        override fun onMetadataChanged(metadata: MediaMetadata?) = publish()
+        override fun onMetadataChanged(metadata: MediaMetadata?) { meta = metadata; publish() }
         override fun onSessionDestroyed() = pick(emptyList())
     }
 
@@ -42,12 +44,17 @@ class MediaListener : NotificationListenerService() {
         msm.addOnActiveSessionsChangedListener(sessionsListener, me)
         pick(msm.getActiveSessions(me))
         Player.log("service connecté")
-        registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF))
+        registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF).apply { addAction(Intent.ACTION_SCREEN_ON) })
     }
 
     // Screen turned off with Spotify around: put our player on the lock screen for when it wakes.
     private val screenOff = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
+            if (i.action == Intent.ACTION_SCREEN_ON) {
+                // shade progress only matters while someone can look at it
+                handler.removeCallbacks(progressTick); progressTick.run(); return
+            }
+            handler.removeCallbacks(progressTick)
             if (Player.state.value.hasSession) launchLockPlayer(c, "écran éteint")
             else Player.log("écran éteint, pas de session Spotify")
         }
@@ -73,6 +80,7 @@ class MediaListener : NotificationListenerService() {
             current?.unregisterCallback(callback)
             current = next
             next?.registerCallback(callback)
+            meta = next?.metadata
         }
         Player.controller = current
         publish()
@@ -80,12 +88,13 @@ class MediaListener : NotificationListenerService() {
 
     private fun publish() {
         val c = current ?: run { Player.state.value = PlayerState(); ShadePlayer.update(this); return }
-        val m = c.metadata
-        val cover = m?.cover()
+        val m = meta
         val old = Player.state.value
         val playing = c.playbackState?.state == PlaybackState.STATE_PLAYING
         val title = m?.getString(MediaMetadata.METADATA_KEY_TITLE).orEmpty()
         val artist = m?.getString(MediaMetadata.METADATA_KEY_ARTIST).orEmpty()
+        val sameTrack = title == old.title && artist == old.artist && old.cover != null
+        val cover = if (sameTrack) old.cover else m?.cover()
         Player.state.value = PlayerState(
             title = title,
             artist = artist,
@@ -93,21 +102,21 @@ class MediaListener : NotificationListenerService() {
             isPlaying = playing,
             hasSession = true,
             durationMs = m?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0,
-            // metadata hands out a new Bitmap each call, so compare the track instead
-            colors = if (title == old.title && artist == old.artist && old.cover != null) old.colors else paletteColors(cover),
+            colors = if (sameTrack) old.colors else paletteColors(cover),
         )
         if (playing && !old.isPlaying && isLocked()) launchLockPlayer(this, "lecture sur téléphone verrouillé")
         ShadePlayer.update(this)
         handler.removeCallbacks(progressTick)
-        if (playing) handler.postDelayed(progressTick, 4000)
+        if (playing && power.isInteractive) handler.postDelayed(progressTick, 5000)
     }
 
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val power by lazy { getSystemService(PowerManager::class.java) }
     // Keeps the shade progress bar moving while music plays.
     private val progressTick = object : Runnable {
         override fun run() {
             ShadePlayer.update(this@MediaListener)
-            if (Player.state.value.isPlaying) handler.postDelayed(this, 4000)
+            if (Player.state.value.isPlaying && power.isInteractive) handler.postDelayed(this, 5000)
         }
     }
 

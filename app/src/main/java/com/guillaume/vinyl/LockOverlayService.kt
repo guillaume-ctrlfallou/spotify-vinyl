@@ -56,12 +56,14 @@ class LockOverlayService : AccessibilityService() {
     private val tick = object : Runnable {
         override fun run() {
             refresh()
-            if (views.isNotEmpty()) handler.postDelayed(this, 500)
+            if (views.isNotEmpty()) handler.postDelayed(this, 1000)
         }
     }
 
     override fun onServiceConnected() {
         running = true
+        // we only need the overlay windows, not the stream of accessibility events
+        serviceInfo = serviceInfo.apply { eventTypes = 0 }
         wm = getSystemService(WindowManager::class.java)
         registerReceiver(events, IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_ON)
@@ -91,8 +93,8 @@ class LockOverlayService : AccessibilityService() {
         if (!shouldShow()) { hide(); return }
         if (views.isEmpty()) { show(); handler.post(tick) }
         val s = Player.state.value
-        title.text = s.title
-        artist.text = s.artist
+        if (title.text != s.title) title.text = s.title
+        if (artist.text != s.artist) artist.text = s.artist
         bar.accent = s.colors[0]
         bar.duration = s.durationMs
         bar.position = Player.controller?.playbackState?.let { ps ->

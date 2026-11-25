@@ -16,7 +16,7 @@ import kotlin.random.Random
 object ShadeArt {
 
     /** Cover cut into a round record, with grooves, reflection and spindle hole. */
-    fun vinyl(cover: Bitmap?, size: Int = 192): Bitmap {
+    fun vinyl(cover: Bitmap?, size: Int = 192, shine: Boolean = true): Bitmap {
         val out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val c = Canvas(out)
         val p = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
@@ -35,8 +35,10 @@ object ShadeArt {
         while (g > r * 0.2f) { c.drawCircle(r, r, g, p); g -= r * 0.04f }
         c.restore()
         p.style = Paint.Style.FILL
-        p.shader = SweepGradient(r, r, intArrayOf(0, 0x26FFFFFF, 0, 0, 0x26FFFFFF, 0), null)
-        c.drawCircle(r, r, r, p); p.shader = null
+        if (shine) {
+            p.shader = SweepGradient(r, r, intArrayOf(0, 0x26FFFFFF, 0, 0, 0x26FFFFFF, 0), null)
+            c.drawCircle(r, r, r, p); p.shader = null
+        }
         p.color = Color.BLACK; c.drawCircle(r, r, r * 0.06f, p)
         p.style = Paint.Style.STROKE; p.strokeWidth = 1.5f; p.color = Color.argb(90, 255, 255, 255)
         c.drawCircle(r, r, r * 0.08f, p)
@@ -45,7 +47,7 @@ object ShadeArt {
 
     /** Dark background with soft glowing ribbons in the cover colors (MilkDrop-like, frozen). */
     fun ribbons(colors: IntArray, seed: Int, w: Int = 480, h: Int = 168): Bitmap {
-        val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val out = Bitmap.createBitmap(w, h, Bitmap.Config.RGB_565) // opaque: half the notification payload
         val c = Canvas(out)
         c.drawColor(Color.rgb(11, 11, 16))
         val rnd = Random(seed)
