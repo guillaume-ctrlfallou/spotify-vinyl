@@ -161,13 +161,10 @@ private fun LockScreen(onUnlock: () -> Unit) {
             Spacer(Modifier.height(18.dp))
             Progress(s.durationMs, accent)
             Spacer(Modifier.height(14.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                Control(android.R.drawable.ic_media_previous, 48.dp, accent.copy(alpha = 0.18f)) { Player.previous() }
-                Control(
-                    if (s.isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
-                    64.dp, accent.copy(alpha = 0.45f),
-                ) { Player.togglePlayPause() }
-                Control(android.R.drawable.ic_media_next, 48.dp, accent.copy(alpha = 0.18f)) { Player.next() }
+            // Arrows at the edges, centre left free for the fingerprint sensor; the disc does play/pause.
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Control(android.R.drawable.ic_media_previous, 52.dp, accent.copy(alpha = 0.22f)) { Player.previous() }
+                Control(android.R.drawable.ic_media_next, 52.dp, accent.copy(alpha = 0.22f)) { Player.next() }
             }
         }
 
