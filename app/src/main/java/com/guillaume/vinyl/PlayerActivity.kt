@@ -80,6 +80,9 @@ class PlayerActivity : ComponentActivity() {
                     open(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.parse("package:$packageName")))
                 }
                 Step("Batterie non restreinte", noBatteryLimit(), "Autoriser") { askBattery() }
+                Step("Mode intégré : garde l'empreinte Samsung (Accessibilité > Applis installées > Vinyle)", LockOverlayService.running, "Activer") {
+                    open(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                }
                 Step("Fond d'écran Vinyle actif (mets-le sur les 2 écrans)", wallpaperSet(), "Choisir") {
                     open(Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).putExtra(
                         WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,

@@ -17,6 +17,8 @@ const val LOCK_NOTIF_ID = 1
  * - otherwise a full-screen notification, the standard way to show something on the lock screen.
  */
 fun launchLockPlayer(ctx: Context, why: String) {
+    // Integrated mode: the overlay service shows the controls by itself, nothing to launch.
+    if (LockOverlayService.running) { Player.log("$why → mode intégré"); return }
     val intent = Intent(ctx, LockActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     if (Settings.canDrawOverlays(ctx)) {
         val ok = runCatching { ctx.startActivity(intent) }.isSuccess

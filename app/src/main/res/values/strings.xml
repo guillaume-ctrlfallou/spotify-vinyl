@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Vinyle</string>
+    <string name="a11y_desc">Affiche les boutons du lecteur Vinyle (disque, précédent, suivant) sur l\'écran de verrouillage, sans cacher l\'empreinte. Vinyle ne lit rien de ce qui est à l\'écran.</string>
 </resources>
