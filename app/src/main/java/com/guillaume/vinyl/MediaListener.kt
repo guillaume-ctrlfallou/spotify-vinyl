@@ -99,7 +99,7 @@ class MediaListener : NotificationListenerService() {
         if (playing && !old.isPlaying && isLocked()) launchLockPlayer(this, "lecture sur téléphone verrouillé")
         ShadePlayer.update(this)
         handler.removeCallbacks(progressTick)
-        if (playing) handler.postDelayed(progressTick, 2000)
+        if (playing) handler.postDelayed(progressTick, 4000)
     }
 
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -107,7 +107,7 @@ class MediaListener : NotificationListenerService() {
     private val progressTick = object : Runnable {
         override fun run() {
             ShadePlayer.update(this@MediaListener)
-            if (Player.state.value.isPlaying) handler.postDelayed(this, 2000)
+            if (Player.state.value.isPlaying) handler.postDelayed(this, 4000)
         }
     }
 

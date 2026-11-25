@@ -21,8 +21,9 @@ private const val NOTIF_ID = 2
  * where the integrated overlay already does the job.
  */
 object ShadePlayer {
-    private var scaledFor: Bitmap? = null
-    private var scaled: Bitmap? = null
+    private var artFor: String? = null
+    private var disc: Bitmap? = null
+    private var bgArt: Bitmap? = null
 
     fun update(ctx: Context) {
         val nm = ctx.getSystemService(NotificationManager::class.java)
@@ -34,22 +35,22 @@ object ShadePlayer {
                 lockscreenVisibility = Notification.VISIBILITY_SECRET
             }
         )
-        // Small copy of the cover: notifications have a size limit.
-        if (s.cover !== scaledFor) {
-            scaledFor = s.cover
-            scaled = s.cover?.let { Bitmap.createScaledBitmap(it, 256, 256 * it.height / it.width.coerceAtLeast(1), true) }
+        // Artwork is drawn once per track and reused for progress updates.
+        val key = s.title + "|" + s.artist + "|" + (s.cover != null)
+        if (key != artFor) {
+            artFor = key
+            disc = ShadeArt.vinyl(s.cover)
+            bgArt = ShadeArt.ribbons(s.colors, key.hashCode())
         }
         val pos = Player.controller?.playbackState?.let { ps ->
             ps.position + if (ps.state == PlaybackState.STATE_PLAYING)
                 ((SystemClock.elapsedRealtime() - ps.lastPositionUpdateTime) * ps.playbackSpeed).toLong() else 0L
         } ?: 0L
-        // Dark tint of the cover's main color as background.
-        val c = s.colors[0]
-        val bg = Color.rgb(Color.red(c) * 35 / 100, Color.green(c) * 35 / 100, Color.blue(c) * 35 / 100)
-
+        val accent = android.content.res.ColorStateList.valueOf(s.colors[0])
         fun views(layout: Int) = RemoteViews(ctx.packageName, layout).apply {
-            setInt(R.id.root, "setBackgroundColor", bg)
-            if (scaled != null) setImageViewBitmap(R.id.cover, scaled) else setImageViewResource(R.id.cover, android.R.drawable.ic_media_play)
+            setImageViewBitmap(R.id.bg, bgArt)
+            setImageViewBitmap(R.id.cover, disc)
+            setColorStateList(R.id.play, "setImageTintList", android.content.res.ColorStateList.valueOf(Color.BLACK))
             setTextViewText(R.id.title, s.title)
             setTextViewText(R.id.artist, s.artist)
             setImageViewResource(R.id.play, if (s.isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play)
@@ -57,6 +58,7 @@ object ShadePlayer {
             setOnClickPendingIntent(R.id.next, action(ctx, "next"))
             if (layout == R.layout.notif_big) {
                 setOnClickPendingIntent(R.id.prev, action(ctx, "prev"))
+                setColorStateList(R.id.progress, "setProgressTintList", accent)
                 setProgressBar(R.id.progress, 1000, if (s.durationMs > 0) (pos * 1000 / s.durationMs).toInt() else 0, false)
                 setTextViewText(R.id.pos, time(pos))
                 setTextViewText(R.id.dur, time(s.durationMs))
