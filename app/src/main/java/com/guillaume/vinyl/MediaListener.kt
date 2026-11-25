@@ -1,6 +1,16 @@
 package com.guillaume.vinyl
 
+import android.app.KeyguardManager
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.PowerManager
 import android.graphics.Bitmap
 import android.media.MediaMetadata
 import android.media.session.MediaController
@@ -9,6 +19,8 @@ import android.media.session.PlaybackState
 import android.service.notification.NotificationListenerService
 
 private const val SPOTIFY = "com.spotify.music"
+private const val CHANNEL = "lock"
+const val LOCK_NOTIF_ID = 1
 
 /**
  * Notification access is what lets us read Spotify's media session.
@@ -35,10 +47,47 @@ class MediaListener : NotificationListenerService() {
         sessions = msm
         msm.addOnActiveSessionsChangedListener(sessionsListener, me)
         pick(msm.getActiveSessions(me))
+        registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF))
+    }
+
+    // Screen turned off with Spotify around: put our player on the lock screen for when it wakes.
+    private val screenOff = object : BroadcastReceiver() {
+        override fun onReceive(c: Context, i: Intent) {
+            if (Player.state.value.hasSession) showLockPlayer()
+        }
+    }
+
+    private fun isLocked(): Boolean =
+        getSystemService(KeyguardManager::class.java).isKeyguardLocked ||
+            !getSystemService(PowerManager::class.java).isInteractive
+
+    /** A full-screen notification is the allowed way to open an activity on the lock screen. */
+    private fun showLockPlayer() {
+        val nm = getSystemService(NotificationManager::class.java)
+        nm.createNotificationChannel(
+            NotificationChannel(CHANNEL, "Lecteur écran de verrouillage", NotificationManager.IMPORTANCE_HIGH).apply {
+                setSound(null, null)
+                enableVibration(false)
+                lockscreenVisibility = Notification.VISIBILITY_SECRET
+            }
+        )
+        val open = PendingIntent.getActivity(
+            this, 0, Intent(this, LockActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val n = Notification.Builder(this, CHANNEL)
+            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setContentTitle("Vinyle")
+            .setCategory(Notification.CATEGORY_ALARM)
+            .setFullScreenIntent(open, true)
+            .setAutoCancel(true)
+            .build()
+        runCatching { nm.notify(LOCK_NOTIF_ID, n) }
     }
 
     override fun onListenerDisconnected() {
         sessions?.removeOnActiveSessionsChangedListener(sessionsListener)
+        runCatching { unregisterReceiver(screenOff) }
         current?.unregisterCallback(callback)
         current = null
         Player.controller = null
@@ -58,13 +107,19 @@ class MediaListener : NotificationListenerService() {
     private fun publish() {
         val c = current ?: run { Player.state.value = PlayerState(); return }
         val m = c.metadata
+        val cover = m?.cover()
+        val old = Player.state.value
+        val playing = c.playbackState?.state == PlaybackState.STATE_PLAYING
         Player.state.value = PlayerState(
             title = m?.getString(MediaMetadata.METADATA_KEY_TITLE).orEmpty(),
             artist = m?.getString(MediaMetadata.METADATA_KEY_ARTIST).orEmpty(),
-            cover = m?.cover(),
-            isPlaying = c.playbackState?.state == PlaybackState.STATE_PLAYING,
+            cover = cover,
+            isPlaying = playing,
             hasSession = true,
+            durationMs = m?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0,
+            colors = if (cover === old.cover) old.colors else paletteColors(cover),
         )
+        if (playing && !old.isPlaying && isLocked()) showLockPlayer()
     }
 
     private fun MediaMetadata.cover(): Bitmap? =

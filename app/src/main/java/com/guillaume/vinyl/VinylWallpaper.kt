@@ -15,7 +15,6 @@ import android.os.Looper
 import android.os.SystemClock
 import android.service.wallpaper.WallpaperService
 import android.view.SurfaceHolder
-import androidx.palette.graphics.Palette
 import kotlin.math.PI
 import kotlin.math.hypot
 import kotlin.math.min
@@ -46,8 +45,6 @@ class VinylWallpaper : WallpaperService() {
         private var last = SystemClock.uptimeMillis()
         private val start = last
 
-        private var paletteFor: Bitmap? = null
-        private var colors = intArrayOf(0xFF6A3DE8.toInt(), 0xFF1DB954.toInt(), 0xFFE8417A.toInt())
 
         private val frame = object : Runnable {
             override fun run() {
@@ -83,21 +80,17 @@ class VinylWallpaper : WallpaperService() {
         }
 
         private fun cx() = w / 2
-        private fun cy() = h * 0.46f
-        private fun radius() = min(w, h) * 0.38f
+        private fun cy() = h * DISC_Y
+        private fun radius() = min(w, h) * DISC_R
 
         private fun draw() {
             val s = Player.state.value
+            val colors = s.colors
             val now = SystemClock.uptimeMillis()
             val dt = (now - last) / 1000f
             last = now
             playAmount += ((if (s.isPlaying) 1f else 0f) - playAmount) * min(1f, dt * 3f)
             angle = (angle + dt * 100f * playAmount) % 360f // ~17 rpm, eases to a stop on pause
-
-            if (s.cover !== paletteFor) {
-                paletteFor = s.cover
-                s.cover?.let { colors = paletteColors(it) }
-            }
 
             val holder = surfaceHolder
             val c = runCatching { holder.lockHardwareCanvas() }.getOrNull() ?: return
@@ -151,13 +144,9 @@ class VinylWallpaper : WallpaperService() {
     }
 }
 
-private fun paletteColors(cover: Bitmap): IntArray {
-    val p = Palette.from(cover).maximumColorCount(16).generate()
-    val found = listOfNotNull(p.vibrantSwatch, p.lightVibrantSwatch, p.dominantSwatch, p.darkVibrantSwatch, p.mutedSwatch)
-        .map { it.rgb }.distinct()
-    if (found.isEmpty()) return intArrayOf(Color.WHITE, Color.GRAY, Color.DKGRAY)
-    return IntArray(3) { found[it % found.size] }
-}
+/** Disc position as fractions of the screen, shared with the lock screen controls. */
+const val DISC_Y = 0.46f
+const val DISC_R = 0.38f
 
 /** MilkDrop-like silky light ribbons (AGSL). Prototyped in WebGL first. */
 private const val MILKDROP = """

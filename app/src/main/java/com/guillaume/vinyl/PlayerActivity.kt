@@ -1,6 +1,8 @@
 package com.guillaume.vinyl
 
+import android.Manifest
 import android.app.WallpaperManager
+import android.net.Uri
 import android.content.ComponentName
 import android.content.Intent
 import android.os.Bundle
@@ -31,6 +33,7 @@ class PlayerActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 0)
         setContent {
             Column(
                 Modifier.fillMaxSize().background(Color(0xFF0B0B10)).padding(32.dp),
@@ -47,9 +50,17 @@ class PlayerActivity : ComponentActivity() {
                     startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                 }) { Text("Autoriser") }
                 Text(
-                    "2. Mets « Vinyle » en fond d'écran. Choisis « Écran de verrouillage » (ou les deux).",
+                    "2. Mets « Vinyle » en fond d'écran sur les deux écrans (accueil et verrouillage), avec le bouton tout en bas.",
                     color = Color.White, fontSize = 17.sp, textAlign = TextAlign.Center,
                 )
+                Text(
+                    "3. Autorise les notifications plein écran : c'est ce qui affiche les boutons du lecteur sur l'écran de verrouillage.",
+                    color = Color.White, fontSize = 17.sp, textAlign = TextAlign.Center,
+                )
+                Button(onClick = {
+                    // Android 13 has no such screen and allows it by default.
+                    runCatching { startActivity(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.parse("package:$packageName"))) }
+                }) { Text("Autoriser l'écran de verrouillage") }
                 Button(onClick = {
                     startActivity(
                         Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).putExtra(
