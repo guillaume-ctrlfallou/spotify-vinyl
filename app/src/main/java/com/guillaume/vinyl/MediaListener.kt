@@ -110,14 +110,17 @@ class MediaListener : NotificationListenerService() {
         val cover = m?.cover()
         val old = Player.state.value
         val playing = c.playbackState?.state == PlaybackState.STATE_PLAYING
+        val title = m?.getString(MediaMetadata.METADATA_KEY_TITLE).orEmpty()
+        val artist = m?.getString(MediaMetadata.METADATA_KEY_ARTIST).orEmpty()
         Player.state.value = PlayerState(
-            title = m?.getString(MediaMetadata.METADATA_KEY_TITLE).orEmpty(),
-            artist = m?.getString(MediaMetadata.METADATA_KEY_ARTIST).orEmpty(),
+            title = title,
+            artist = artist,
             cover = cover,
             isPlaying = playing,
             hasSession = true,
             durationMs = m?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0,
-            colors = if (cover === old.cover) old.colors else paletteColors(cover),
+            // metadata hands out a new Bitmap each call, so compare the track instead
+            colors = if (title == old.title && artist == old.artist && old.cover != null) old.colors else paletteColors(cover),
         )
         if (playing && !old.isPlaying && isLocked()) showLockPlayer()
     }

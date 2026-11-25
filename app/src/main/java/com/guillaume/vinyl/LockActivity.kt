@@ -7,7 +7,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Bundle
+import android.os.PowerManager
 import android.os.SystemClock
+import android.media.session.PlaybackState
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
@@ -74,6 +77,10 @@ class LockActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setShowWhenLocked(true)
+        // Cover the camera cutout too, so our layout matches the full-screen wallpaper.
+        window.attributes = window.attributes.apply {
+            layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+        }
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowInsetsControllerCompat(window, window.decorView).apply {
             hide(WindowInsetsCompat.Type.navigationBars())
@@ -87,7 +94,9 @@ class LockActivity : ComponentActivity() {
         super.onResume()
         getSystemService(NotificationManager::class.java).cancel(LOCK_NOTIF_ID)
         // Opened while the phone is already unlocked (or nothing to show): don't sit on top of anything.
-        if (!getSystemService(KeyguardManager::class.java).isKeyguardLocked || !Player.state.value.hasSession) finish()
+        val unlockedNow = !getSystemService(KeyguardManager::class.java).isKeyguardLocked &&
+            getSystemService(PowerManager::class.java).isInteractive
+        if (unlockedNow || !Player.state.value.hasSession) finish()
     }
 
     override fun onDestroy() {
@@ -183,7 +192,8 @@ private fun Progress(durationMs: Long, accent: Color) {
         while (true) {
             Player.controller?.playbackState?.let { ps ->
                 // Position is reported at lastPositionUpdateTime; extrapolate to now.
-                pos = ps.position + ((SystemClock.elapsedRealtime() - ps.lastPositionUpdateTime) * ps.playbackSpeed).toLong()
+                pos = ps.position + if (ps.state == PlaybackState.STATE_PLAYING)
+                    ((SystemClock.elapsedRealtime() - ps.lastPositionUpdateTime) * ps.playbackSpeed).toLong() else 0L
             }
             delay(500)
         }

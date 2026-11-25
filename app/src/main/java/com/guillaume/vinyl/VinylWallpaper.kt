@@ -65,6 +65,7 @@ class VinylWallpaper : WallpaperService() {
 
         override fun onSurfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
             w = width.toFloat(); h = height.toFloat()
+            handler.removeCallbacks(frame)
             handler.post(frame)
         }
 
