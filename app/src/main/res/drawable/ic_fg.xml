@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Speaker: body, tweeter, woofer with a ring in the app's colors. Same as docs/icon.svg. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FF15151C" android:strokeColor="#FFFFFFFF" android:strokeWidth="2.5"
+        android:pathData="M44,24 H64 A9,9 0 0 1 73,33 V75 A9,9 0 0 1 64,84 H44 A9,9 0 0 1 35,75 V33 A9,9 0 0 1 44,24 Z" />
+    <path android:fillColor="#FF0B0B10" android:strokeColor="#FFFFFFFF" android:strokeWidth="2" android:pathData="M49,38 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0 Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M52.4,38 a1.6,1.6 0 1,0 3.2,0 a1.6,1.6 0 1,0 -3.2,0 Z" />
+    <path android:fillColor="#FF0B0B10" android:strokeWidth="3.5" android:pathData="M41,64 a13,13 0 1,0 26,0 a13,13 0 1,0 -26,0 Z">
+        <aapt:attr name="android:strokeColor"><gradient android:type="linear" android:startX="40" android:startY="48" android:endX="68" android:endY="76"><item android:offset="0" android:color="#FF8B5CFF" /><item android:offset="0.5" android:color="#FFE8417A" /><item android:offset="1" android:color="#FF1DB954" /></gradient></aapt:attr>
+    </path>
+    <path android:fillColor="#FF1E1E28" android:strokeColor="#59FFFFFF" android:strokeWidth="1" android:pathData="M46.5,64 a7.5,7.5 0 1,0 15.0,0 a7.5,7.5 0 1,0 -15.0,0 Z" />
+    <path android:pathData="M51,64 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0 Z">
+        <aapt:attr name="android:fillColor"><gradient android:type="linear" android:startX="40" android:startY="48" android:endX="68" android:endY="76"><item android:offset="0" android:color="#FF8B5CFF" /><item android:offset="0.5" android:color="#FFE8417A" /><item android:offset="1" android:color="#FF1DB954" /></gradient></aapt:attr>
+    </path>
+</vector>

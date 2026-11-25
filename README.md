@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/icon.png" width="128" alt="Icône Vinyle"></p>
+
 # 🎶 Vinyle
 
 **Un lecteur Spotify en vinyle pour l'écran de verrouillage Android.**
