@@ -83,7 +83,7 @@ class PlayerActivity : ComponentActivity() {
                 Step("Mode intégré : garde l'empreinte Samsung (Accessibilité > Applis installées > Vinyle)", LockOverlayService.running, "Activer") {
                     open(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                 }
-                Step("Fond d'écran Vinyle actif (mets-le sur les 2 écrans)", wallpaperSet(), "Choisir") {
+                Step("Fond d'écran Vinyle actif (mets-le sur les 2 écrans)", wallpaperSet(), if (wallpaperSet()) "Changer" else "Choisir", always = true) {
                     open(Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).putExtra(
                         WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
                         ComponentName(this@PlayerActivity, VinylWallpaper::class.java)))
@@ -127,11 +127,11 @@ class PlayerActivity : ComponentActivity() {
 }
 
 @Composable
-private fun Step(label: String, ok: Boolean, button: String?, onFix: () -> Unit) {
+private fun Step(label: String, ok: Boolean, button: String?, always: Boolean = false, onFix: () -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(if (ok) "✓" else "✗", color = if (ok) Color(0xFF1DB954) else Color(0xFFE8417A), fontSize = 22.sp)
         Spacer(Modifier.width(12.dp))
         Text(label, color = Color.White, fontSize = 15.sp, modifier = Modifier.weight(1f))
-        if (!ok && button != null) Button(onClick = onFix) { Text(button) }
+        if ((!ok || always) && button != null) Button(onClick = onFix) { Text(button) }
     }
 }
