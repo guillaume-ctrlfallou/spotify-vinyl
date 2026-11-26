@@ -17,9 +17,9 @@ android {
     // Fixed debug key so each new APK installs over the previous one.
     signingConfigs {
         getByName("debug") {
-            storeFile = file("debug.keystore")
+            storeFile = file(System.getenv("SIGNING_KEYSTORE_PATH") ?: "debug.keystore")
             storePassword = "android"
-            keyAlias = "androiddebugkey"
+            keyAlias = if (System.getenv("SIGNING_KEYSTORE_PATH") != null) "vinyle" else "androiddebugkey"
             keyPassword = "android"
         }
     }

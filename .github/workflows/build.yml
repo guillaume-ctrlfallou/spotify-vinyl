@@ -10,6 +10,17 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 17 }
       - uses: gradle/actions/setup-gradle@v4
+      # The signing key lives in a repo secret, never in the code, so nobody else can sign a fake update.
+      - name: Signing key
+        env: { KEY: "${{ secrets.SIGNING_KEYSTORE }}" }
+        run: |
+          if [ -z "$KEY" ]; then
+            if [ "$GITHUB_REF" = refs/heads/main ]; then echo "::error::SIGNING_KEYSTORE secret missing"; exit 1; fi
+            keytool -genkeypair -keystore app/debug.keystore -storepass android -keypass android -alias androiddebugkey -keyalg RSA -dname CN=dev -validity 365
+          else
+            echo "$KEY" | base64 -d > "$RUNNER_TEMP/vinyle.keystore"
+            echo "SIGNING_KEYSTORE_PATH=$RUNNER_TEMP/vinyle.keystore" >> "$GITHUB_ENV"
+          fi
       - run: ./gradlew assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
         with:
