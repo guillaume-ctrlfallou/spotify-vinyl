@@ -83,7 +83,7 @@ class PlayerActivity : ComponentActivity() {
                 Step("Mode intégré : garde l'empreinte Samsung (Accessibilité > Applis installées > Vinyle)", LockOverlayService.running, "Activer") {
                     open(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                 }
-                Step("Fond d'écran Vinyle actif (mets-le sur les 2 écrans)", wallpaperSet(), if (wallpaperSet()) "Changer" else "Choisir", always = true) {
+                Step("Fond d'écran Vinyle actif (accueil, verrouillage ou les 2)", wallpaperSet(), if (wallpaperSet()) "Changer" else "Choisir", always = true) {
                     open(Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).putExtra(
                         WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
                         ComponentName(this@PlayerActivity, VinylWallpaper::class.java)))
@@ -123,7 +123,13 @@ class PlayerActivity : ComponentActivity() {
     @SuppressLint("BatteryLife") // sideloaded personal app, not on the Play Store
     private fun askBattery() = open(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
 
-    private fun wallpaperSet() = WallpaperManager.getInstance(this).wallpaperInfo?.packageName == packageName
+    // Home, lock, or both: any of them counts (some people want Vinyle on the lock screen only).
+    private fun wallpaperSet(): Boolean {
+        val wm = WallpaperManager.getInstance(this)
+        if (wm.wallpaperInfo?.packageName == packageName) return true
+        return android.os.Build.VERSION.SDK_INT >= 34 &&
+            wm.getWallpaperInfo(WallpaperManager.FLAG_LOCK)?.packageName == packageName
+    }
 }
 
 @Composable
