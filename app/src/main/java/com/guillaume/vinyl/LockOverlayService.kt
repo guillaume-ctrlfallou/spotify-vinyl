@@ -65,8 +65,11 @@ class LockOverlayService : AccessibilityService() {
 
     override fun onServiceConnected() {
         running = true
-        // we only need the overlay windows, not the stream of accessibility events
-        serviceInfo = serviceInfo.apply { eventTypes = 0 }
+        // Only window changes of the system UI (shade, PIN pad), never other apps and never screen content.
+        serviceInfo = serviceInfo.apply {
+            eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+            packageNames = arrayOf("com.android.systemui")
+        }
         wm = getSystemService(WindowManager::class.java)
         registerReceiver(events, IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_ON)
@@ -84,15 +87,28 @@ class LockOverlayService : AccessibilityService() {
         super.onDestroy()
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        val now = SystemClock.uptimeMillis()
+        if (event == null) return
+        if (views.isNotEmpty() || stepAside) Player.log("interface système : ${event.className?.toString()?.substringAfterLast('.')}")
+        if (now - lastSwitch < 700) return
+        if (views.isNotEmpty() && now - lastOutside < 1500) {
+            // touched the lock screen and the system UI changed right after: shade or PIN pad opened
+            stepAside = true; lastSwitch = now; hide()
+        } else if (stepAside && views.isEmpty()) {
+            // system UI changed back (shade or PIN pad closed)
+            stepAside = false; lastSwitch = now; refresh()
+        }
+    }
     override fun onInterrupt() {}
 
-    // A touch elsewhere on the lock screen means the shade or the PIN pad is coming: get out of the way
-    // until the screen turns off and on again. We can't see those windows (no screen reading, on purpose).
+    // Hidden while the shade or the PIN pad is open: a touch outside our windows followed by a system UI change.
     private var stepAside = false
     private var lastOwnDown = 0L
+    private var lastOutside = 0L
+    private var lastSwitch = 0L
     private val stepAsideCheck = Runnable {
-        if (SystemClock.uptimeMillis() - lastOwnDown > 200) { stepAside = true; hide() }
+        if (SystemClock.uptimeMillis() - lastOwnDown > 200) lastOutside = SystemClock.uptimeMillis()
     }
 
     private fun shouldShow(): Boolean =
