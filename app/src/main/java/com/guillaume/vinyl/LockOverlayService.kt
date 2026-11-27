@@ -91,14 +91,10 @@ class LockOverlayService : AccessibilityService() {
         val now = SystemClock.uptimeMillis()
         if (event == null) return
         if (views.isNotEmpty() || stepAside) Player.log("interface système : ${event.className?.toString()?.substringAfterLast('.')}")
-        if (now - lastSwitch < 700) return
-        if (views.isNotEmpty() && now - lastOutside < 1500) {
-            // touched the lock screen and the system UI changed right after: shade or PIN pad opened
-            stepAside = true; lastSwitch = now; hide()
-        } else if (stepAside && views.isEmpty()) {
-            // system UI changed back (shade or PIN pad closed)
-            stepAside = false; lastSwitch = now; refresh()
-        }
+        // Touched the lock screen and the system UI changed right after: shade or PIN pad opened.
+        // Samsung sends several identical events per change, so this never toggles back on an event:
+        // the player returns on the next screen on, so it can never cover the PIN pad.
+        if (views.isNotEmpty() && now - lastOutside < 3000) { stepAside = true; hide() }
     }
     override fun onInterrupt() {}
 
@@ -106,7 +102,6 @@ class LockOverlayService : AccessibilityService() {
     private var stepAside = false
     private var lastOwnDown = 0L
     private var lastOutside = 0L
-    private var lastSwitch = 0L
     private val stepAsideCheck = Runnable {
         if (SystemClock.uptimeMillis() - lastOwnDown > 200) lastOutside = SystemClock.uptimeMillis()
     }
