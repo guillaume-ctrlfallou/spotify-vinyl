@@ -50,7 +50,10 @@ class LockOverlayService : AccessibilityService() {
     private lateinit var next: ImageView
 
     private val events = object : BroadcastReceiver() {
-        override fun onReceive(c: Context, i: Intent) = refresh()
+        override fun onReceive(c: Context, i: Intent) {
+            if (i.action == Intent.ACTION_SCREEN_ON || i.action == Intent.ACTION_SCREEN_OFF) stepAside = false
+            refresh()
+        }
     }
 
     private val tick = object : Runnable {
@@ -84,8 +87,16 @@ class LockOverlayService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
     override fun onInterrupt() {}
 
+    // A touch elsewhere on the lock screen means the shade or the PIN pad is coming: get out of the way
+    // until the screen turns off and on again. We can't see those windows (no screen reading, on purpose).
+    private var stepAside = false
+    private var lastOwnDown = 0L
+    private val stepAsideCheck = Runnable {
+        if (SystemClock.uptimeMillis() - lastOwnDown > 200) { stepAside = true; hide() }
+    }
+
     private fun shouldShow(): Boolean =
-        Player.state.value.hasSession &&
+        !stepAside && Player.state.value.hasSession &&
             getSystemService(KeyguardManager::class.java).isKeyguardLocked &&
             getSystemService(PowerManager::class.java).isInteractive
 
@@ -144,6 +155,7 @@ class LockOverlayService : AccessibilityService() {
 
     private fun hide() {
         handler.removeCallbacks(tick)
+        handler.removeCallbacks(stepAsideCheck)
         views.forEach { runCatching { wm.removeView(it) } }
         views.clear()
     }
@@ -153,12 +165,21 @@ class LockOverlayService : AccessibilityService() {
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
         if (!touchable) flags = flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        else flags = flags or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
         val lp = WindowManager.LayoutParams(width, height, x, y,
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY, flags, PixelFormat.TRANSLUCENT).apply {
             gravity = Gravity.TOP or Gravity.START
             layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
         }
-        runCatching { wm.addView(v, lp); views += v }.onFailure { Player.log("fenêtre refusée : ${it.message}") }
+        val root = if (!touchable) v else object : android.widget.FrameLayout(this) {
+            override fun dispatchTouchEvent(e: MotionEvent): Boolean {
+                // A tap on one of our other windows also reaches here as "outside": wait a moment to tell them apart.
+                if (e.actionMasked == MotionEvent.ACTION_OUTSIDE) { handler.postDelayed(stepAsideCheck, 60); return true }
+                if (e.actionMasked == MotionEvent.ACTION_DOWN) { lastOwnDown = SystemClock.uptimeMillis(); handler.removeCallbacks(stepAsideCheck) }
+                return super.dispatchTouchEvent(e)
+            }
+        }.apply { addView(v, -1, -1) }
+        runCatching { wm.addView(root, lp); views += root }.onFailure { Player.log("fenêtre refusée : ${it.message}") }
     }
 
     private fun text(size: Float, bold: Boolean) = TextView(this).apply {
